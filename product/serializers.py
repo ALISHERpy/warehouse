@@ -1,8 +1,10 @@
 from rest_framework import serializers
-
-import warehouse
-from product.models import Product, Warehouse
+from .models import Product
 
 class MySerializer(serializers.Serializer):
-    product_name = serializers.CharField(required=True, help_text="Name of the product",max_length=32)
-    quantity = serializers.IntegerField(required=True, help_text="Quantity of the product")
+    PRODUCT_CHOICES = [(product.name, product.name) for product in Product.objects.all()]
+
+    product_name1 = serializers.ChoiceField(choices=PRODUCT_CHOICES)
+    quantity1 = serializers.IntegerField()
+    product_name2 = serializers.ChoiceField(choices=PRODUCT_CHOICES)
+    quantity2 = serializers.IntegerField()

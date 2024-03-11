@@ -12,21 +12,21 @@ class MyApiView(CreateAPIView):
     def post(self, request):
         serializer = MySerializer(data=request.data)
         if serializer.is_valid():
-            product_name = request.data.get('product_name')
-            product_qty = int(request.data.get('quantity'))
-
-            materials_name = ProductMaterial.objects.filter(product__name__exact=product_name)
-            my_dict = {}
-            for obj in materials_name:
-                my_dict[obj.material.name] = product_qty * obj.quantity
-            product_materials = {
-                f"{product_name}": my_dict
+            datas = {
+                request.data.get('product_name1'): int(request.data.get('quantity1')),
+                request.data.get('product_name2'): int(request.data.get('quantity2'))
             }
+            product_materials = {}
+            for d, v in datas.items():
+                my_dict = {}
+                # print(d,v)
+                my_objs = ProductMaterial.objects.filter(product__name__exact=d)
+                for obj in my_objs:
+                    my_dict[obj.material.name] = v * obj.quantity
+                my_dict['soni'] = v
+                product_materials[d] = my_dict
 
-            product_materials = {
-                'Koylak': {'Mato': 24, 'Tugma': 150, 'Ip': 300},
-                'Shim': {'Mato': 28, 'Ip': 300, 'Zamok': 20}}
-#########################################################
+            # print(product_materials)
             warehouse_queryset = Warehouse.objects.all()
             warehouse_list = []
             for warehouse in warehouse_queryset:
@@ -35,67 +35,38 @@ class MyApiView(CreateAPIView):
                     'material': warehouse.material.name,
                     'remainder': warehouse.remainder,
                     'price': int(warehouse.price),
-                    # Add other fields as needed
                 }
                 warehouse_list.append(warehouse_dict)
             # print(warehouse_list)
-            # warehouse_list = [
-            #     {'id': 1, 'material': 'Mato', 'remainder': 12, 'price': 1500},
-            #     {'id': 2, 'material': 'Mato', 'remainder': 200, 'price': 1600},
-            #     {'id': 3, 'material': 'Ip', 'remainder': 40, 'price': 500},
-            #     {'id': 4, 'material': 'Ip', 'remainder': 300, 'price': 550},
-            #     {'id': 5, 'material': 'Tugma', 'remainder': 500, 'price': 300},
-            #     {'id': 6, 'material': 'Zamok', 'remainder': 1000, 'price': 2000}
-            # ]
 
             result = []
-            for product_name, material_quantities in product_materials.items():
-                product_result = {
-                    'product_name': product_name,
-                    'product_qty': product_qty,
-                    'product_materials': []
+            for d, v in product_materials.items():
+                # print(d, v)
+                mylist = []
+
+                for my_material, my_quantity in v.items():
+                    # print(my_material, my_quantity)
+
+                    for obj in warehouse_list:
+                        obj_kopisi = obj.copy()
+
+                        # print(obj)
+                        if my_material == obj['material'] and my_quantity > obj['remainder']:
+
+                            my_quantity -= obj_kopisi['remainder']
+                            mylist.append(obj_kopisi)
+                            obj['remainder'] = 0
+
+                        elif my_material == obj['material'] and my_quantity <= obj['remainder']:
+                            obj_kopisi['remainder'] = my_quantity
+                            mylist.append(obj_kopisi)
+                            obj['remainder'] -= my_quantity
+
+                result.append({
+                    "product_name": d,
+                    "product_qty": v['soni'],
+                    "product_materials": mylist,
                 }
-
-                allocated_ids = set()
-                for material_name, required_quantity in material_quantities.items():
-                    remaining_quantity = required_quantity
-                    for warehouse in warehouse_list:
-                        if warehouse['material'] == material_name and warehouse['remainder'] >= remaining_quantity:
-                            allocated_ids.add(warehouse['id'])
-                            product_result['product_materials'].append({
-                                'warehouse_id': warehouse['id'],
-                                'material_name': material_name,
-                                'qty': remaining_quantity,
-                                'price': warehouse['price']
-                            })
-                            warehouse['remainder'] -= remaining_quantity
-                            remaining_quantity = 0
-
-                        elif warehouse['material'] == material_name and warehouse['remainder'] > 0:
-                            allocated_quantity = min(remaining_quantity, warehouse['remainder'])
-                            allocated_ids.add(warehouse['id'])
-                            product_result['product_materials'].append({
-                                'warehouse_id': warehouse['id'],
-                                'material_name': material_name,
-                                'qty': allocated_quantity,
-                                'price': warehouse['price']
-                            })
-                            warehouse['remainder'] -= allocated_quantity
-                            remaining_quantity -= allocated_quantity
-                        if remaining_quantity == 0:
-                            break
-                    if remaining_quantity > 0:
-                        product_result['product_materials'].append({
-                            'warehouse_id': None,
-                            'material_name': material_name,
-                            'qty': remaining_quantity,
-                            'price': None
-                        })
-                for warehouse in warehouse_list:
-                    if warehouse['id'] in allocated_ids:
-                        warehouse['remainder'] = max(0, warehouse['remainder'])
-                result.append(product_result)
+                )
 
             return Response({'result': result})
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
